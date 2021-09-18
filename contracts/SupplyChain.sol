@@ -3,53 +3,53 @@ pragma solidity >=0.5.16 <0.9.0;
 
 contract SupplyChain {
 
-  // <owner>
-
-  // <skuCount>
-
-  // <items mapping>
-
-  // <enum State: ForSale, Sold, Shipped, Received>
-
+  address owner; // internal, private, public?
+  uint skuCount; // internal, private, public?
+  mapping (uint => Item) items; // internal, private, public?
+  enum State{ ForSale, Sold, Shipped, Received };
+  
   // <struct Item: name, sku, price, state, seller, and buyer>
+  struct Item {
+    string name;
+    uint sku;
+    uint price;
+    State state;
+    address seller;
+    address buyer;
+  }
   
   /* 
    * Events
    */
-
-  // <LogForSale event: sku arg>
-
-  // <LogSold event: sku arg>
-
-  // <LogShipped event: sku arg>
-
-  // <LogReceived event: sku arg>
-
+  event LogForSale(uint indexed sku);
+  event LogSold(uint indexed sku);
+  event LogShipped(uint indexed sku);
+  event LogReceived(uint indexed sku);
 
   /* 
    * Modifiers
    */
 
-  // Create a modifer, `isOwner` that checks if the msg.sender is the owner of the contract
-
   // <modifier: isOwner
+  modifier isOwner(){
+    require(msg.sender == owner);
+  }
 
   modifier verifyCaller (address _address) { 
-    // require (msg.sender == _address); 
-    _;
+    require (msg.sender == _address); 
+    _; // what's this line for?
   }
 
   modifier paidEnough(uint _price) { 
-    // require(msg.value >= _price); 
+    require(msg.value >= _price); 
     _;
   }
 
   modifier checkValue(uint _sku) {
-    //refund them after pay for item (why it is before, _ checks for logic before func)
+    uint _price = items[_sku].price;
+    uint amountToRefund = msg.value - _price;
+    items[_sku].buyer.transfer(amountToRefund);
     _;
-    // uint _price = items[_sku].price;
-    // uint amountToRefund = msg.value - _price;
-    // items[_sku].buyer.transfer(amountToRefund);
   }
 
   // For each of the following modifiers, use what you learned about modifiers
@@ -60,56 +60,64 @@ contract SupplyChain {
   // that an Item is for sale. Hint: What item properties will be non-zero when
   // an Item has been added?
 
-  // modifier forSale
+  modifier forSale (uint _sku) {
+    Item item = items[_sku];
+    require(item.seller > "0x0"); // not sure what to check?
+    require(item.state == State.ForSale);
+  }
+
+  modifier sold(uint _sku){
+    require(items[_sku].state == State.Sold);
+  }
   // modifier sold(uint _sku) 
-  // modifier shipped(uint _sku) 
-  // modifier received(uint _sku) 
+  modifier shipped(uint _sku){
+    require(items[_sku].state == State.Shipped);
+  }
+
+  modifier received(uint _sku){
+    require(items[_sku].state == State.Received);
+  }
 
   constructor() public {
     // 1. Set the owner to the transaction sender
+    owner = msg.sender;
     // 2. Initialize the sku count to 0. Question, is this necessary?
+    skuCount = 0; // not necessary, default value is 0
   }
 
   function addItem(string memory _name, uint _price) public returns (bool) {
-    // 1. Create a new item and put in array
-    // 2. Increment the skuCount by one
-    // 3. Emit the appropriate event
-    // 4. return true
-
-    // hint:
-    // items[skuCount] = Item({
-    //  name: _name, 
-    //  sku: skuCount, 
-    //  price: _price, 
-    //  state: State.ForSale, 
-    //  seller: msg.sender, 
-    //  buyer: address(0)
-    //});
-    //
-    //skuCount = skuCount + 1;
-    // emit LogForSale(skuCount);
-    // return true;
+    skuCount += 1;
+    items[skuCount] = Item({
+     name: _name, 
+     sku: skuCount, 
+     price: _price, 
+     state: State.ForSale, 
+     seller: msg.sender, 
+     buyer: address(0)
+    });
+    emit LogForSale(skuCount);
+    return true;
   }
 
-  // Implement this buyItem function. 
-  // 1. it should be payable in order to receive refunds
-  // 2. this should transfer money to the seller, 
-  // 3. set the buyer as the person who called this transaction, 
-  // 4. set the state to Sold. 
+  function buyItem(uint sku) payable public // 1. it should be payable in order to receive refunds
   // 5. this function should use 3 modifiers to check 
-  //    - if the item is for sale, 
-  //    - if the buyer paid enough, 
-  //    - check the value after the function is called to make 
-  //      sure the buyer is refunded any excess ether sent. 
-  // 6. call the event associated with this function!
-  function buyItem(uint sku) public {}
+    forSale(sku) //    - if the item is for sale, 
+    paidEnough(sku) //    - if the buyer paid enough, 
+    checkValue(sku) //    - check the value after the function is called to make sure the buyer is refunded any excess ether sent. 
+  {
+    msg.sender.transfer(items[sku].seller); // 2. this should transfer money to the seller, 
+    items[sku].buyer = msg.sender; // 3. set the buyer as the person who called this transaction, 
+    items[sku].state = State.Sold; // 4. set the state to Sold. 
+    emit LogSold(sku); // 6. call the event associated with this function!
+  }
 
-  // 1. Add modifiers to check:
-  //    - the item is sold already 
-  //    - the person calling this function is the seller. 
-  // 2. Change the state of the item to shipped. 
-  // 3. call the event associated with this function!
-  function shipItem(uint sku) public {}
+  function shipItem(uint sku) public 
+    sold(sku) //    - the item is sold already 
+    // verifyCaller() //    - the person calling this function is the seller. 
+  {
+    items[sku].state = State.Shipped; // 2. Change the state of the item to shipped. 
+    emit LogShipped(sku); // 3. call the event associated with this function!
+  }
 
   // 1. Add modifiers to check 
   //    - the item is shipped already 
